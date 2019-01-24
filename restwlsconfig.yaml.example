@@ -1,0 +1,29 @@
+description: "RestWLS configuration file"
+version: "0.1"
+
+configurations:
+   base_config: &base
+      --- Base url for your WLS admin server including port
+      baseurl: http://myserver:7001/management/weblogic/latest
+      base64auth: <base64 auth string>
+
+   ohi_datasources_health:
+      <<: *base
+      name: OHI readonly datasource check
+      servers: [ osb_server1, osb_server2 ]
+      --- note the camelcasing!
+      resultattribute: numAvailable
+      url: /domainRuntime/serverRuntimes/[SERVER]/JDBCServiceRuntime/JDBCDataSourceRuntimeMBeans/MyDataSource
+      responsemessage: OHI datasource currently using [RESULT] connections
+      --- less then
+      warning: 2[6-9]|3[0-8]
+      critical: 39|40
+
+   ohi_datasources_health:
+      <<: *base
+      name: OHI readonly datasource check
+      servers: [ osb_server1, osb_server2 ]
+      resultattribute: numAvailable
+      url: /domainRuntime/serverRuntimes/[SERVER]/JDBCServiceRuntime/JDBCDataSourceRuntimeMBeans/MyDataSource
+      warning: 2[6-9]|3[0-8]
+      critical: 39|40
