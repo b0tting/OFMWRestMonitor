@@ -8,6 +8,44 @@ import yaml
 from base64 import b64encode
 
 
+class NagiosBoundaryCheck:
+    def __init__(self, configDict):
+        ###
+        # I expect warning or critical configuration to look like:
+        # warning:
+        #       expression: regex
+        # <or>  lessthan: number
+        # <or>  greaterthan: number
+        ###
+        if configDict == False:
+            self.type = "fake"
+        elif("expression" in configDict):
+            self.type = "exp"
+            self.boundary = configDict["expression"]
+        elif("lessthan" in configDict):
+            self.type = "lt"
+            self.boundaryfloat = float(configDict["lessthan"])
+        elif("greaterthan" in configDict):
+            self.type = "gt"
+            self.boundaryfloat = float(configDict["greaterthan"])
+        else:
+            raise ValueError("A warning or critical boundary should have an 'expression', 'lessthan' or 'greaterthan' value")
+
+        self.message = "" if not "message" in configDict else configDict["message"]
+
+    def inBadState(self, value):
+        if(self.type == "fake"):
+            return False
+        elif(self.type == "exp"):
+            return re.match(self.boundary, value)
+        elif (self.type == "lt"):
+            return float(value) < self.boundaryfloat
+        elif (self.type == "gt"):
+            return float(value) > self.boundaryfloat
+
+    def getMessage(self):
+        return self.message
+
 ## Configureable values, to be moved to the config file
 TIMEOUT=10
 RETRIES=3
@@ -99,8 +137,8 @@ if __name__ == "__main__":
         ## Skip unnamed configurations as they are probably used as templates
         if "name" in config.keys():
             ## Some setup
-            warningexp = False if "warning" not in config else config["warning"]["expression"]
-            criticalexp = False if "critical" not in config else config["critical"]["expression"]
+            warningCheck = NagiosBoundaryCheck(False if "warning" not in config else config["warning"])
+            criticalCheck = NagiosBoundaryCheck(False if "critical" not in config else config["critical"])
 
             ## Set up the basic auth header
             if "username" in config:
@@ -122,22 +160,18 @@ if __name__ == "__main__":
                     nagiosMessage += server + " reports " + result[1]
                 else:
                     nagiosMessage += config["message"]
-                    if criticalexp:
-                        if re.match(criticalexp, result[0]):
-                            nagiosResult = NAGIOS_CRITICAL if nagiosResult < NAGIOS_CRITICAL else nagiosResult
-                            if config["critical"].has_key("message"):
-                                nagiosMessage += config["critical"]["message"]
+                    if criticalCheck.inBadState(result[0]):
+                        nagiosResult = NAGIOS_CRITICAL if nagiosResult < NAGIOS_CRITICAL else nagiosResult
+                        nagiosMessage += criticalCheck.getMessage()
+                    elif warningCheck.inBadState(result[0]):
+                        nagiosResult = NAGIOS_WARNING if nagiosResult < NAGIOS_WARNING else nagiosResult
+                        nagiosMessage += warningCheck.getMessage()
 
-                    if warningexp:
-                        if re.match(warningexp, result[0]):
-                            nagiosResult = NAGIOS_WARNING if nagiosResult < NAGIOS_WARNING else nagiosResult
-                            if config["critical"].has_key("message"):
-                                nagiosMessage += config["critical"]["message"]
-
-                    if nagiosMessage.find(RESULTBLOCK) > -1:
-                        nagiosMessage = nagiosMessage.replace(RESULTBLOCK, result[0])
-                    if nagiosMessage.find(SERVERBLOCK) > -1:
-                        nagiosMessage = nagiosMessage.replace(SERVERBLOCK, server)
+                ## After handling the result, transform macros in the message
+                if nagiosMessage.find(RESULTBLOCK) > -1:
+                    nagiosMessage = nagiosMessage.replace(RESULTBLOCK, result[0])
+                if nagiosMessage.find(SERVERBLOCK) > -1:
+                    nagiosMessage = nagiosMessage.replace(SERVERBLOCK, server)
 
             print(NAGIOS_DICT[nagiosResult] + ": " + nagiosMessage)
             print(nagiosResult)
