@@ -43,6 +43,9 @@ class NagiosBoundaryCheck:
         elif (self.type == "gt"):
             return float(value) > self.boundaryfloat
 
+    def getPerformanceIndicator(self):
+        return self.boundaryfloat if hasattr(self, "boundaryfloat") else False
+
     def getMessage(self):
         return self.message
 
@@ -66,7 +69,7 @@ def getValueOverJSON(url, key, auth):
     global lazyMap
     data = False
     error = False
-    result = False
+    result = 0
     attempts = 0
     while attempts < RETRIES:
         try:
@@ -129,16 +132,20 @@ if __name__ == "__main__":
         print("Your authstring is " + userAndPass)
         exit(0)
 
-    nagiosResult = NAGIOS_OK
-    nagiosMessage = ""
-
     for name in configurations["configurations"]:
         config = configurations["configurations"][name]
+
         ## Skip unnamed configurations as they are probably used as templates
         if "name" in config.keys():
             ## Some setup
+            nagiosResult = NAGIOS_OK
+            nagiosMessage = ""
+            nagiosPerformanceData = ""
+
             warningCheck = NagiosBoundaryCheck(False if "warning" not in config else config["warning"])
             criticalCheck = NagiosBoundaryCheck(False if "critical" not in config else config["critical"])
+            performanceData = False if "performancedata" not in config else config["performancedata"]
+            unknownToCrit = False if "unknownascritical" not in config else config["unknownascritical"]
 
             ## Set up the basic auth header
             if "username" in config:
@@ -159,13 +166,14 @@ if __name__ == "__main__":
                     nagiosResult = NAGIOS_UNKNOWN
                     nagiosMessage += server + " reports " + result[1]
                 else:
-                    nagiosMessage += config["message"]
                     if criticalCheck.inBadState(result[0]):
                         nagiosResult = NAGIOS_CRITICAL if nagiosResult < NAGIOS_CRITICAL else nagiosResult
                         nagiosMessage += criticalCheck.getMessage()
                     elif warningCheck.inBadState(result[0]):
                         nagiosResult = NAGIOS_WARNING if nagiosResult < NAGIOS_WARNING else nagiosResult
                         nagiosMessage += warningCheck.getMessage()
+                    else:
+                        nagiosMessage += config["message"]
 
                 ## After handling the result, transform macros in the message
                 if nagiosMessage.find(RESULTBLOCK) > -1:
@@ -173,7 +181,24 @@ if __name__ == "__main__":
                 if nagiosMessage.find(SERVERBLOCK) > -1:
                     nagiosMessage = nagiosMessage.replace(SERVERBLOCK, server)
 
-            print(NAGIOS_DICT[nagiosResult] + ": " + nagiosMessage)
-            print(nagiosResult)
+                ## Now add performance data
+                if performanceData:
+                    if nagiosPerformanceData != "":
+                        nagiosPerformanceData += " "
+
+                    nagiosPerformanceData += "'" + server + "'=" + result[0]
+                    nagiosPerformanceData += ";"
+                    if warningCheck.getPerformanceIndicator():
+                        nagiosPerformanceData += str(warningCheck.getPerformanceIndicator())
+                    if criticalCheck.getPerformanceIndicator():
+                        nagiosPerformanceData += ";" + str(criticalCheck.getPerformanceIndicator())
+
+                if unknownToCrit and nagiosResult == NAGIOS_UNKNOWN:
+                    nagiosResult = NAGIOS_CRITICAL
+
+            if performanceData:
+                print(NAGIOS_DICT[nagiosResult] + ": " + nagiosMessage + " | " + nagiosPerformanceData)
+            else:
+                print(NAGIOS_DICT[nagiosResult] + ": " + nagiosMessage)
             exit(nagiosResult)
 

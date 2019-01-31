@@ -11,19 +11,23 @@ configurations:
       <<: *base
       name: OHI readonly datasource check
       servers: [ osb_server1, osb_server2 ]
+
       --- note the camelcasing!
       resultattribute: numAvailable
       url: /domainRuntime/serverRuntimes/[SERVER]/JDBCServiceRuntime/JDBCDataSourceRuntimeMBeans/MyDataSource
       responsemessage: OHI datasource currently using [RESULT] connections
       --- less then
-      warning: 2[6-9]|3[0-8]
-      critical: 39|40
+      warning:
+        lessthan: 25
+        message: OHI at [SERVER] has too much connections at [RESULT] connections
+      critical:
+        --- other options are lessthan and greaterthan
+        expression: 39|40
+        message: OHI at [SERVER] is overloaded at [RESULT] connections
 
-   ohi_datasources_health:
-      <<: *base
-      name: OHI readonly datasource check
-      servers: [ osb_server1, osb_server2 ]
-      resultattribute: numAvailable
-      url: /domainRuntime/serverRuntimes/[SERVER]/JDBCServiceRuntime/JDBCDataSourceRuntimeMBeans/MyDataSource
-      warning: 2[6-9]|3[0-8]
-      critical: 39|40
+      --- This will only add performancedata if you used a scalar in warn / critical, ie. a lessthan / greaterthan
+      performancedata: true
+
+      --- Treat an unknown value as a critical
+      unknownascritical: true
+
