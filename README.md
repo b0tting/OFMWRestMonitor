@@ -1,18 +1,24 @@
 So, when trying to monitor Oracle Fusion Middleware installations using your in place on-site monitoring such as Nagios, you have a number of options. The obvious ones are to use WLST or any other java JMX based tooling. 
+But the java process is expensive resource-wise. And you wouldn't be the first to create a situation where WLST scripts take such a long time to start and finish that they are piling on top of each other, draining your production machine of it's precious resources. 
 
-But the java process is expensive. And you wouldn't be the first to create a situation where WLST scripts take such a long time to start and finish that they are piling on top of each other, draining your production machine of it's precious resources. 
+An alternative would be to use SNMP. In the WebLogic implementation it is hard to find your own configured components such as specific datasources. 
 
-An alternative would be to use SNMP. But in the WebLogic implementation it is hard to find your own configured components such as datasources. 
+With WebLogic 12c (12.2.1.2 and up) we have a new option in the form of a REST interface. Easy, lightweight and somewhat complete. Here's a script that can be configured to grab specific variables from there with a Nagios valid return code and performance data.  
 
-With WebLogic 12c (12.2.1.2 and up) we have a new option in the form of a REST interface. Easy, lightweight and somewhat complete. 
-
+## Installation
+The configuration file requires the Python YAML library. Pick one: 
+``` 
+pip install -r requirements.txt
+yum install pyyaml
+apt install python-yaml
+``` 
 ## NRPE
 This script should be used over the NRPE agent. For example, you could have a custom NRPE file with the following command:
 
 ```
-command[chk_datasources]=/usr/local/restwls.py datasources_health
+command[chk_datasources]=/usr/bin/python /usr/local/restwls.py -c datasources_health
 ```
-The chk_datasources label is the command given to the NRPE configuration in Nagios. The datasources_health label refers to the datasources_health entry in the OFMWRestMonitor YAML file.
+The chk_datasources label is the command given to the NRPE configuration in Nagios. The datasources_health label refers to the datasources_health entry in the script YAML file.
 
 The script will then grab the correct configuration from the YAML config, check the given URL and parse the results to return a succesful Nagios result. 
   
