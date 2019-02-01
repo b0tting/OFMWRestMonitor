@@ -1,0 +1,30 @@
+description: "RestWLS configuration file"
+version: "0.1"
+
+# This is a less verbose example file for a quick kickoff
+
+configurations:
+   base_config: &base
+      baseurl: http://myserver:7001/management/weblogic/latest
+      base64auth: <base64 auth string>
+
+      # We can also use the cleartext username / password of any WebLogic account
+      # username: weblogicmonitor
+      # password: welcome01
+      # The WLS REST API sometimes suffers timeouts. Some tuning is possible
+      retries: 3
+      timeout: 10
+
+   managed_server_stuck_threads:
+      <<: *base
+      description: Managed Server stuck threads
+      servers: [ osb_server1, osb_server2 ]
+      resultattribute: stuckThreadCount
+      message: Managed server [SERVER] has [RESULT] stuck threads
+      url: /management/weblogic/latest/domainRuntime/serverRuntimes/[SERVER]/threadPoolRuntime
+      warning:
+        greaterthan: 6
+      critical:
+        greaterthan: 10
+        message: Managed server [SERVER] currently has [RESULT] stuck threads and should reboot!
+
