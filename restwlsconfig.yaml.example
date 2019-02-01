@@ -1,28 +1,56 @@
 description: "RestWLS configuration file"
 version: "0.1"
 
+# This is YAML. If you don't know about YAML, you need to know that spaces are used for indentation. Whitespace width defines sections
+#
 configurations:
+   # We lean on YAML includes to define a base template
+   # All checks referring to this base_config will inherent its parameters
    base_config: &base
-      --- Base url for your WLS admin server including port
+      # Base url for your WLS admin server including port
       baseurl: http://myserver:7001/management/weblogic/latest
+
+      # A base64 encoded username:password string, generated using the -b option
       base64auth: <base64 auth string>
-      # The REST API sometimes suffers timeouts. Tune here.
+
+      # We can also use the cleartext username / password of any WebLogic account
+      # username: weblogicmonitor
+      # password: welcome01
+
+      # The WLS REST API sometimes suffers timeouts. Some tuning is possible
       retries: 3
       timeout: 10
 
 
    ohi_datasources_health:
       <<: *base
-      name: OHI readonly datasource check
+      # A description label, unused in checking
+      description: OHI readonly datasource check
+
+      # What servers to check, can be a YAML list or a comma seperated list
       servers: [ osb_server1, osb_server2 ]
 
-      # note the camelcasing! This is an attribute at the JSON top level. To go deeper lower, use a dot based notation, for example, overallHealthState.state
+      # note the camelcasing! This is an attribute at the JSON top level.
+      # To go deeper lower, use a dot based notation, for example, to read
+      # {
+      #    overalHealthState:
+      #      state: "RUNNING"
+      # }
+      # use overalHealthState.state
       resultattribute: numAvailable
+
+      # URI to fetch
       url: /domainRuntime/serverRuntimes/[SERVER]/JDBCServiceRuntime/JDBCDataSourceRuntimeMBeans/MyDataSource
+
+      # The nagios descriptive message, with options of a [RESULT] and [SERVER] macro
       responsemessage: OHI datasource currently using [RESULT] connections
-      # less then
+
+      # When to consider the result a warning
       warning:
+        # Lessthan, greaterthan (both numbers) or expression to use a regexp
         lessthan: 25
+
+        # Optional message, the base message will be used if none are her
         message: OHI at [SERVER] has too much connections at [RESULT] connections
       critical:
         # other options are lessthan and greaterthan

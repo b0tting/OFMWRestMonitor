@@ -174,7 +174,9 @@ if __name__ == "__main__":
             else:
                 auth = config["authstring"]
 
-            for server in config["servers"]:
+            servers = config["servers"].split(",") if type(config["servers"]) != list else config["servers"]
+
+            for server in servers:
                 if nagiosMessage != "":
                     nagiosMessage += ". "
 
