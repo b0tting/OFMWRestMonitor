@@ -9,7 +9,7 @@ from base64 import b64encode
 
 
 class NagiosBoundaryCheck:
-    def __init__(self, configDict):
+    def __init__(self, configDict, defaultMessage):
         ###
         # I expect warning or critical configuration to look like:
         # warning:
@@ -30,29 +30,27 @@ class NagiosBoundaryCheck:
             self.boundaryfloat = float(configDict["greaterthan"])
         else:
             raise ValueError("A warning or critical boundary should have an 'expression', 'lessthan' or 'greaterthan' value")
-
-        self.message = "" if not "message" in configDict else configDict["message"]
+        self.message = defaultMessage if not "message" in configDict else configDict["message"]
 
     def inBadState(self, value):
         if(self.type == "fake"):
             return False
         elif(self.type == "exp"):
             return re.match(self.boundary, value)
-        elif (self.type == "lt"):
-            return float(value) < self.boundaryfloat
-        elif (self.type == "gt"):
-            return float(value) > self.boundaryfloat
+        else:
+            try:
+                if (self.type == "lt"):
+                    return float(value) < self.boundaryfloat
+                elif (self.type == "gt"):
+                    return float(value) > self.boundaryfloat
+            except ValueError as e:
+                raise ValueError("check expected a numerical value from WebLogic but got '" + str(value) + "'")
 
     def getPerformanceIndicator(self):
         return self.boundaryfloat if hasattr(self, "boundaryfloat") else False
 
     def getMessage(self):
         return self.message
-
-## Configureable values, to be moved to the config file
-TIMEOUT=10
-RETRIES=3
-
 
 ## Const values
 NAGIOS_OK = 0
@@ -65,43 +63,62 @@ SERVERBLOCK="[SERVER]"
 
 
 lazyMap = {}
-def getValueOverJSON(url, key, auth):
+def getValueOverJSON(url, key, auth, retries, timeout):
     global lazyMap
     data = False
     error = False
     result = 0
     attempts = 0
-    while attempts < RETRIES:
+    while attempts < retries:
         try:
             request = urllib2.Request(url)
             request.add_header("Authorization", "Basic " + auth)
-            response = urllib2.urlopen(request, timeout=TIMEOUT)
-            data = json.loads(response.read())
-            attempts = RETRIES
+            response = urllib2.urlopen(request, timeout=timeout)
+            responseData = response.read()
+            if("Gateway Timeout") in responseData:
+                raise Exception("WLS Management URL gateway timeout")
+            data = json.loads(responseData)
+            attempts = retries
+        except urllib2.HTTPError as e:
+            if "404" in str(e):
+                error = "management URL incorrect for " + url + ", '" + str(e) + "'"
+                attempts = retries
+            else:
+                error = "unknown URL error for " + url + ", '" + str(e) + "'"
+                attempts = retries
         except urllib2.URLError as e:
-            print(str(e))
+            print(e.reason)
             if "Connection refused" in str(e):
                 error = "Connection refused, giving up connecting to " + url + " attempt " + str(attempts)
-                attempts = RETRIES
+                attempts = retries
             elif "timed out" in str(e):
                 error = "URL error, probably a timeout when connecting to " + url + " attempt " + str(attempts)
                 attempts += 1
                 time.sleep(10)
-            else:
-                error = "Unknown URL error for: " + url + " : " + str(e)
-                attempts = RETRIES
         except Exception as e:
             attempts += 1
             error = "Could not correct to " + url + " attempt " + str(attempts) + " with error: " + str(e)
-    if key in data:
-        result = data[key]
-    else:
-        if "status" in data and data["status"] == 404:
-            error = "WLS management page for url " + url + " did not exist"
-        else:
-            error = "Could not find the attribute '"+key+"' on the WLS management response page for " + url
+    ## Let's parse!
+    if data:
+        current = data
+        try:
+            keys = key.split(".")
+            for curkey in keys:
+                if(curkey in current):
+                    current = current[curkey]
+                else:
+                    raise Exception("Could not find next variable " + curkey + " (" + key + ") in result from " + url)
+            result = current
+        except Exception as e:
+            if "status" in data and data["status"] == 404:
+                error = "WLS management page for url " + url + " did not exist"
+            else:
+                error = str(e)
 
     return (str(result), error)
+
+def getCheckNames(configurations):
+    return [name for name in configurations["configurations"] if "url" in configurations["configurations"][name]]
 
 if __name__ == "__main__":
     configfile = open("restwlsconfig.yaml","r")
@@ -114,8 +131,7 @@ if __name__ == "__main__":
     
     Known checks:
     '''
-    for name in configurations["configurations"]:
-        description += name
+    description += "\n".join(getCheckNames(configurations))
 
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("-c", "--check", help="Check name to run. If none, all are run (useless in a Nagios context)")
@@ -132,18 +148,23 @@ if __name__ == "__main__":
         print("Your authstring is " + userAndPass)
         exit(0)
 
-    for name in configurations["configurations"]:
+    if args.check:
+        if args.check not in getCheckNames(configurations):
+            print("UNKNOWN: Could not find " + args.check + " in the list of known checks. Run script with -h parameter to get a list of known checks.")
+            exit(NAGIOS_UNKNOWN)
+
+    for name in getCheckNames(configurations):
         config = configurations["configurations"][name]
 
         ## Skip unnamed configurations as they are probably used as templates
-        if "name" in config.keys():
+        if not args.check or args.check == name:
             ## Some setup
             nagiosResult = NAGIOS_OK
             nagiosMessage = ""
             nagiosPerformanceData = ""
 
-            warningCheck = NagiosBoundaryCheck(False if "warning" not in config else config["warning"])
-            criticalCheck = NagiosBoundaryCheck(False if "critical" not in config else config["critical"])
+            warningCheck = NagiosBoundaryCheck(False if "warning" not in config else config["warning"], config["message"])
+            criticalCheck = NagiosBoundaryCheck(False if "critical" not in config else config["critical"], config["message"])
             performanceData = False if "performancedata" not in config else config["performancedata"]
             unknownToCrit = False if "unknownascritical" not in config else config["unknownascritical"]
 
@@ -155,25 +176,29 @@ if __name__ == "__main__":
 
             for server in config["servers"]:
                 if nagiosMessage != "":
-                    nagiosMessage += ", "
+                    nagiosMessage += ". "
 
                 url = config["baseurl"] + config["url"]
                 url = url.replace("[SERVER]", server)
-                result = getValueOverJSON(url, config["resultattribute"],auth)
+                result = getValueOverJSON(url, config["resultattribute"], auth, retries=config["retries"], timeout=config["timeout"])
 
                 ## If the error message is not empty
                 if result[1]:
                     nagiosResult = NAGIOS_UNKNOWN
                     nagiosMessage += server + " reports " + result[1]
                 else:
-                    if criticalCheck.inBadState(result[0]):
-                        nagiosResult = NAGIOS_CRITICAL if nagiosResult < NAGIOS_CRITICAL else nagiosResult
-                        nagiosMessage += criticalCheck.getMessage()
-                    elif warningCheck.inBadState(result[0]):
-                        nagiosResult = NAGIOS_WARNING if nagiosResult < NAGIOS_WARNING else nagiosResult
-                        nagiosMessage += warningCheck.getMessage()
-                    else:
-                        nagiosMessage += config["message"]
+                    try:
+                        if criticalCheck.inBadState(result[0]):
+                            nagiosResult = NAGIOS_CRITICAL if nagiosResult < NAGIOS_CRITICAL else nagiosResult
+                            nagiosMessage += criticalCheck.getMessage()
+                        elif warningCheck.inBadState(result[0]):
+                            nagiosResult = NAGIOS_WARNING if nagiosResult < NAGIOS_WARNING else nagiosResult
+                            nagiosMessage += warningCheck.getMessage()
+                        else:
+                            nagiosMessage += config["message"]
+                    except ValueError as e:
+                        nagiosResult = NAGIOS_UNKNOWN
+                        nagiosMessage += "Unexpected result, " + str(e)
 
                 ## After handling the result, transform macros in the message
                 if nagiosMessage.find(RESULTBLOCK) > -1:
@@ -200,5 +225,9 @@ if __name__ == "__main__":
                 print(NAGIOS_DICT[nagiosResult] + ": " + nagiosMessage + " | " + nagiosPerformanceData)
             else:
                 print(NAGIOS_DICT[nagiosResult] + ": " + nagiosMessage)
-            exit(nagiosResult)
+
+            ## If running just one check, exit here
+            if args.check:
+                exit(nagiosResult)
+    exit(0)
 

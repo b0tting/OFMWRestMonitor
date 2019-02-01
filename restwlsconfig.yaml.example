@@ -6,28 +6,32 @@ configurations:
       --- Base url for your WLS admin server including port
       baseurl: http://myserver:7001/management/weblogic/latest
       base64auth: <base64 auth string>
+      # The REST API sometimes suffers timeouts. Tune here.
+      retries: 3
+      timeout: 10
+
 
    ohi_datasources_health:
       <<: *base
       name: OHI readonly datasource check
       servers: [ osb_server1, osb_server2 ]
 
-      --- note the camelcasing!
+      # note the camelcasing! This is an attribute at the JSON top level. To go deeper lower, use a dot based notation, for example, overallHealthState.state
       resultattribute: numAvailable
       url: /domainRuntime/serverRuntimes/[SERVER]/JDBCServiceRuntime/JDBCDataSourceRuntimeMBeans/MyDataSource
       responsemessage: OHI datasource currently using [RESULT] connections
-      --- less then
+      # less then
       warning:
         lessthan: 25
         message: OHI at [SERVER] has too much connections at [RESULT] connections
       critical:
-        --- other options are lessthan and greaterthan
+        # other options are lessthan and greaterthan
         expression: 39|40
         message: OHI at [SERVER] is overloaded at [RESULT] connections
 
-      --- This will only add performancedata if you used a scalar in warn / critical, ie. a lessthan / greaterthan
+      # This will only add performancedata if you used a scalar in warn / critical, ie. a lessthan / greaterthan
       performancedata: true
 
-      --- Treat an unknown value as a critical
+      # Treat an unknown value as a critical
       unknownascritical: true
 
