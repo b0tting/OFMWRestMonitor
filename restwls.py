@@ -31,7 +31,7 @@ class NagiosBoundaryCheck:
             self.boundaryfloat = float(configDict["greaterthan"])
         else:
             raise ValueError("A warning or critical boundary should have an 'expression', 'lessthan' or 'greaterthan' value")
-        self.message = defaultMessage if not "message" in configDict else configDict["message"]
+        self.message = defaultMessage if (not configDict or "message" not in configDict) else configDict["message"]
 
     def inBadState(self, value):
         if(self.type == "fake"):
@@ -178,7 +178,7 @@ Known checks:
             exit(NAGIOS_UNKNOWN)
     else:
         print(parser.description)
-        print("No known checks ocheck name was given, so we will run all known checks for testing purposes. Run with -h for more options.\n")
+        print("No known checks or check name was given, so we will run all known checks for testing purposes. Run with -h for more options.\n")
 
 
     for name in getCheckNames(configurations):
