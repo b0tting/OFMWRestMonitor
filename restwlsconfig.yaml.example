@@ -10,6 +10,11 @@ configurations:
       # Base url for your WLS admin server including port
       baseurl: http://myserver:7001/management/weblogic/latest
 
+      # Any additional parameters to append to the request URL. For example, the mimetype as required by Jolokia URLs:
+      # parameters:
+      #    ignoreErrors: true
+      #    mimeType: application/json
+
       # A base64 encoded username:password string, generated using the -b option
       base64auth: <base64 auth string>
 

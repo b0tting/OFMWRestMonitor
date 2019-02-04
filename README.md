@@ -60,3 +60,30 @@ Somewhere, somehow, this script will need a username and password combination. A
 
 Note that the base64 header is still trivial to decipher for any intruder. Please monitor your file permissions and create a special user for monitoring with only readonly permissions (the monitor role) to limit access.   
 
+## On Jolokia
+This check script also works with Jolokia (https://jolokia.org/). Jolokia can be used as an alternative REST JMX client and can be used in a way very similar to the /management URL. It gives me less timeouts and a more complete overview while missing some familiar structure (it just displays everything). Frank Munz wrote a still relevant overview of Jolokia on WebLogic at http://www.munzandmore.com/2012/ora/weblogic-rest-management-jolokia.
+
+To get a good, authenticated WAR you need to add a role mapping to inform WebLogic on how to authenticate users. Installing Jolokia as follows: 
+
+* Download the Jolokia WAR agent
+* We should map the Jolokia role to a WebLogic user group, for example, to "Monitors". Add a weblogic.xml file with the following content to the jolokia war in /WEB-INF:
+```
+<?xml version = '1.0' encoding = 'windows-1252'?>
+<weblogic-web-app xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://www.bea.com/ns/weblogic/weblogic-web-app.xsd"
+                  xmlns="http://www.bea.com/ns/weblogic/weblogic-web-app">
+  <security-role-assignment>
+    <role-name>jolokia</role-name>
+    <principal-name>Monitors</principal-name>
+  </security-role-assignment>
+</weblogic-web-app>
+```
+* Deploy this war in WebLogic on the server you wish to monitor (probably NOT the AdminServer). Use the "DD only" security role option. Note that you can monitor the full WebLogic domain configuration from anywhere, but the runtime information only on the server you deployed on.     
+* Find the base URL in the "testing" tab of the Jolokia deployment in the WebLogic admin console
+* Feed this a mBean name in the URL, like "com.bea:Name=AdminServer": 
+```
+http://myServer:7001/jolokia-war-1.6.0/read/com.bea:Name=AdminServer,Type=Server?ignoreErrors=true&mimeType=application/json
+```
+* You can log in with any user that is a member of the "Monitors" group
+
+In the script, use the "parameters" attribute of your check to add the mimetype and ignoreErrors parameters. See the restwlsconfig.yaml.jolokiaexample for a good example to jump off on.  

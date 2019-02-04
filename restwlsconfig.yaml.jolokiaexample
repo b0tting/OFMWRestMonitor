@@ -1,0 +1,23 @@
+description: "RestWLS configuration file"
+version: "0.1"
+
+# This is a less verbose example file for a quick kickoff
+
+configurations:
+   jolokia_base_config: &jolobase
+      baseurl: http:/myserver:7001/jolokia-war-1.6.0/read/
+      username: weblogic
+      password: welcome01
+      parameters:
+          ignoreErrors: true
+          mimeType: application/json
+
+   check_opss_datasource:
+      <<: *jolobase
+      description: OPSS Datasource state
+      servers: [ AdminServer ]
+      resultattribute: value.State
+      message: The OPSS datasource at [SERVER] is currently in state [RESULT]
+      url: com.bea:Name=opss-data-source,ServerRuntime=[SERVER],Type=JDBCDataSourceRuntime
+      critical:
+        expression: Overloaded
