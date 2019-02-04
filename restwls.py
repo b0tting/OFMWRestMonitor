@@ -61,6 +61,8 @@ NAGIOS_DICT = {NAGIOS_OK: "OK", NAGIOS_WARNING: "WARNING", NAGIOS_CRITICAL: "CRI
 RESULTBLOCK="[RESULT]"
 SERVERBLOCK="[SERVER]"
 CONFIG_FILE="restwlsconfig.yaml"
+TIMEOUT_DEFAULT=10
+RETRIES_DEFAULT=3
 
 lazyMap = {}
 def getValueOverJSON(url, key, auth, retries, timeout):
@@ -203,7 +205,11 @@ Known checks:
 
                 url = config["baseurl"] + config["url"]
                 url = url.replace("[SERVER]", server)
-                result = getValueOverJSON(url, config["resultattribute"], auth, retries=config["retries"], timeout=config["timeout"])
+                result = getValueOverJSON(url,
+                                          config["resultattribute"],
+                                          auth,
+                                          retries= config["retries"] if "retries" in config else RETRIES_DEFAULT,
+                                          timeout= config["timeout"] if "timeout" in config else TIMEOUT_DEFAULT)
 
                 ## If the error message is not empty
                 if result[1]:

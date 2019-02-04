@@ -9,18 +9,46 @@ With WebLogic 12c (12.2.1.2 and up) we have a new option in the form of a REST i
 The configuration file requires the Python YAML library. Pick one: 
 ``` 
 pip install -r requirements.txt
-yum install pyyaml
+yum install python-yaml
 apt install python-yaml
-``` 
-## NRPE
-This script should be used over the NRPE agent. For example, you could have a custom NRPE file with the following command:
-
 ```
-command[chk_datasources]=/usr/bin/python /usr/local/restwls.py -c datasources_health
-```
-The chk_datasources label is the command given to the NRPE configuration in Nagios. The datasources_health label refers to the datasources_health entry in the script YAML file.
 
-The script will then grab the correct configuration from the YAML config, check the given URL and parse the results to return a succesful Nagios result. 
+## How to configure with Nagios
+Let's assume you want to monitor the number of stuck threads on the AdminServer of your current domain. 
+##### REST URL
+First you'll need to figure out the right WLS REST management URL. You could start from http://myserver:7001/management/weblogic/latest/domainRuntime in a browser, but lets open http://myserver:7001/management/weblogic/latest/domainRuntime/serverRuntimes/AdminServer directly. Find the "threadpoolRuntime" URL and open that, which should be http://myserver:7001/management/weblogic/latest/domainRuntime/serverRuntimes/AdminServer/threadPoolRuntime. The number of stuck threads are found in the stuckThreadCount attribute. We'll need that and the URL.
+
+##### Configure restwlsconfig.yaml
+Let's skip YAML templating for now. Create a new check like following:
+```
+configurations:
+    stuck_thread_counter:
+      baseurl: http://myserver:7001/management/weblogic/latest
+      username: weblogicmonitor
+      password: welcome01
+      servers: AdminServer
+      resultattribute: stuckThreadCount
+      message: [SERVER] has [RESULT] stuck threads
+      url: /management/weblogic/latest/domainRuntime/serverRuntimes/[SERVER]/threadPoolRuntime
+      critical:
+        greaterthan: 10
+        message: [SERVER] currently has [RESULT] stuck threads and should reboot!
+```
+This should give an OK if the number of stuck threads is less than 10. Otherwise, it will return a Nagios critical message.
+
+##### Testing
+When you run the restwls script with the -h parameter, it will display a help message and the names of all known tests. If you run the restwls script without any parameters it will then run all tests.
+
+To run just your own script run with the -c parameter. If results are as expected (a nice "OK: AdminServer has 0 stuck threads") you can add your check to Nagios, if it has local access. 
+
+##### NRPE  
+To run over NRPE, just add the following to your NRPE configuration. 
+```
+command[chk_stucks]=/usr/bin/python /usr/local/restwls.py -c stuck_thread_counter
+```
+The chk_stucks label is the command given to the NRPE configuration in Nagios. The stuck_thread_counter label refers to the stuck_thread_counter entry in the script YAML file. The script will then grab the correct configuration from the YAML config, check the given URL and parse the results to return a succesful Nagios result.
+
+If you run the script with the -g parameter it will generate an NRPE configuration for all known checks.    
   
 
 ## Security considerations
