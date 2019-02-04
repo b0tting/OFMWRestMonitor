@@ -2,6 +2,7 @@
 import argparse
 import re
 import time
+import urllib
 import urllib2
 import json
 import yaml
@@ -65,7 +66,7 @@ TIMEOUT_DEFAULT=10
 RETRIES_DEFAULT=3
 
 lazyMap = {}
-def getValueOverJSON(url, key, auth, retries, timeout):
+def getValueOverJSON(url, params, key, auth, retries, timeout):
     global lazyMap
     data = False
     error = False
@@ -73,7 +74,11 @@ def getValueOverJSON(url, key, auth, retries, timeout):
     attempts = 0
     while attempts < retries:
         try:
-            request = urllib2.Request(url)
+            if params:
+                encoded = urllib.urlencode(params)
+                request = urllib2.Request(url + "?" + encoded)
+            else:
+                request = urllib2.Request(url)
             request.add_header("Authorization", "Basic " + auth)
             response = urllib2.urlopen(request, timeout=timeout)
             responseData = response.read()
@@ -190,6 +195,7 @@ Known checks:
             criticalCheck = NagiosBoundaryCheck(False if "critical" not in config else config["critical"], config["message"])
             performanceData = False if "performancedata" not in config else config["performancedata"]
             unknownToCrit = False if "unknownascritical" not in config else config["unknownascritical"]
+            params = False if "parameters" not in config else config["parameters"]
 
             ## Set up the basic auth header
             if "username" in config:
@@ -206,6 +212,7 @@ Known checks:
                 url = config["baseurl"] + config["url"]
                 url = url.replace("[SERVER]", server)
                 result = getValueOverJSON(url,
+                                          params,
                                           config["resultattribute"],
                                           auth,
                                           retries= config["retries"] if "retries" in config else RETRIES_DEFAULT,
