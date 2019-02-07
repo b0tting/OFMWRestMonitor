@@ -128,31 +128,40 @@ def getCheckNames(configurations):
     return [name for name in configurations["configurations"] if "url" in configurations["configurations"][name]]
 
 if __name__ == "__main__":
-    if(os.path.exists(CONFIG_FILE)):
-        configfile = open(CONFIG_FILE,"r")
-        configurations = yaml.load(configfile)
-    else:
-        print("Could not find a YAML config file named " + CONFIG_FILE + "!")
-        configurations = ["configurations"]
+    description = '''  
+https://github.com/b0tting/OFMWRestMonitor (motting@qualogy.com)
 
-    description = '''
-This is a support script for the "zzwlshealth" health check, used by the F5 load balancer and WebLogic to
-see which WebLogic instance can receive requests. Use this script to disable a server and tell the load
-balancer to stop sending requests to this specific instance.
+This is a script for checking the WebLogic server REST URLs and return a valid message for
+handling in Nagios monitoring. Note that this script requires a valid config file 
 
-This file expects a config file named restwlsconfig.yaml
-
-Known checks:
 '''
-    description += "\n".join(getCheckNames(configurations))
-    description += "\n"
-
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("-c", "--check", help="Check name to run. If none, all are run (useless in a Nagios context)")
+    parser.add_argument("-l", "--list", action='store_true', help="List checks in the current config")
+    parser.add_argument("-y", "--yamlconfig", help="Location of a YAML config, assumes restwlsconfig.yaml if none is given")
     parser.add_argument("-v", "--verbose", action='store_true', help="Enable verbose logging, not useable in Nagios contexts")
     parser.add_argument("-b", "--basicauth", action="store_true", help="Ask for credentials to generate a base auth header value, useable in the config")
     parser.add_argument("-g", "--generatenrpe", action="store_true", help="Generate the NRPE lines for all known checks")
     args = parser.parse_args()
+
+    if args.yamlconfig:
+        configfile = args.yamlconfig
+    else:
+        configfile = CONFIG_FILE
+        if not os.path.exists(configfile):
+            configfile = os.path.join(os.path.dirname(os.path.realpath(__file__)), configfile)
+
+    if(os.path.exists(configfile)):
+        try:
+            configurations = yaml.load(open(configfile, "r"))
+        except yaml.YAMLError, exc:
+            if hasattr(exc, 'problem_mark'):
+                mark = exc.problem_mark
+                print "Error position: (%s:%s)" % (mark.line + 1, mark.column + 1)
+            print("Could not parse YAML, " + str(exc))
+    else:
+        print("UNKNOWN: Could not find a YAML config file named " + configfile + "!")
+        exit(4)
 
     if args.basicauth:
         user = raw_input("Please enter the user you wish to use for monitoring [weblogic]: ")
@@ -171,6 +180,13 @@ Known checks:
         print result
         exit(0)
 
+    if args.list:
+        print(parser.description)
+        print("Known checks:")
+        known = "\n".join(getCheckNames(configurations))
+        known += "\n"
+        print(known)
+        exit(0)
 
     if args.check:
         if args.check not in getCheckNames(configurations):
