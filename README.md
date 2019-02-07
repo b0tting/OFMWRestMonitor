@@ -1,9 +1,11 @@
+# WebLogic Nagios monitoring over REST
+
 So, when trying to monitor Oracle Fusion Middleware installations using your in place on-site monitoring such as Nagios, you have a number of options. The obvious ones are to use WLST or any other java JMX based tooling. 
 But the java process is expensive resource-wise. And you wouldn't be the first to create a situation where WLST scripts take such a long time to start and finish that they are piling on top of each other, draining your production machine of it's precious resources. 
 
-An alternative would be to use SNMP. In the WebLogic implementation it is hard to find your own configured components such as specific datasources. 
+An alternative would be to use SNMP. But in the WebLogic implementation it is hard to find your own configured components such as specific datasources. 
 
-With WebLogic 12c (12.2.1.2 and up) we have a new option in the form of a REST interface. Easy, lightweight and somewhat complete. Here's a script that can be configured to grab specific variables from there with a Nagios valid return code and performance data.  
+With WebLogic 12c (12.2.1.2 and up) we have a new option in the form of a REST interface. Easy, lightweight and somewhat complete. Check_wls_rest is a script that can be configured to grab specific variables from there with a Nagios valid return code and performance data.  
 
 ## Installation
 The configuration file requires the Python YAML library. Pick one: 
@@ -44,7 +46,7 @@ To run just your own script run with the -c parameter. If results are as expecte
 ##### NRPE  
 To run over NRPE, just add the following to your NRPE configuration. 
 ```
-command[chk_stucks]=/usr/bin/python /usr/local/restwls.py -c stuck_thread_counter
+command[chk_stucks]=/usr/bin/python /usr/local/check_wls_rest.py -c stuck_thread_counter
 ```
 The chk_stucks label is the command given to the NRPE configuration in Nagios. The stuck_thread_counter label refers to the stuck_thread_counter entry in the script YAML file. The script will then grab the correct configuration from the YAML config, check the given URL and parse the results to return a succesful Nagios result.
 
