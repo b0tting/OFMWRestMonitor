@@ -52,6 +52,10 @@ The chk_stucks label is the command given to the NRPE configuration in Nagios. T
 
 If you run the script with the -g parameter it will generate an NRPE configuration for all known checks.    
   
+##### JMX beans not found when browsing REST pages
+There is a bug in the 12.2.1.3 WebLogic (Metalink bug id 29712200) where the convenience URLs generated in the REST pages are incorrect. If you click through the pages in a browser and get "not found" errors, take a good look at the URL. It could be that part is missing. 
+
+This happens for example with JMS server URLs: the link generated in the browser is /management/weblogic/latest/domainRuntime/serverRuntimes/AdminServer/JMSServers/JMSServer1 instead of the required /management/weblogic/latest/domainRuntime/serverRuntimes/AdminServer/JMSRuntime/JMSServers/JMSServer1 (as in, the JMSRuntime bit is missing)
 
 ## Security considerations
 ### Firewalling
